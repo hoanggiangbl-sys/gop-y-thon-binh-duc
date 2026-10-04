@@ -38,8 +38,9 @@
         .footer-copyright { text-align: center; margin-top: 18px; font-size: 11.5px; color: #8a8d91; border-top: 1px solid #eee; padding-top: 10px; }
     </style>
 
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <!-- Firebase SDKs (Cùng phiên bản 8.10.1 tương thích) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </head>
 <body>
 
@@ -102,17 +103,17 @@
 </div>
 
 <script>
-    // Cấu hình Firebase cho Thôn Bình Đức
+    // Cấu hình Firebase chuẩn cho Thôn Bình Đức
     const firebaseConfig = {
-  apiKey: "AIzaSyBvNKP7IgBqQtujRiwjK44fwsC-FYG6Cb4",
-  authDomain: "gop-y-thon-binh-duc.firebaseapp.com",
-  databaseURL: "https://gop-y-thon-binh-duc-default-rtdb.firebaseio.com",
-  projectId: "gop-y-thon-binh-duc",
-  storageBucket: "gop-y-thon-binh-duc.firebasestorage.app",
-  messagingSenderId: "35340837576",
-  appId: "1:35340837576:web:3fb1d9521f6b9aafdc3bfd",
-  measurementId: "G-CZL9V5H9VX"
-};
+      apiKey: "AIzaSyBvNKP7IgBqQtujRiwjK44fwsC-FYG6Cb4",
+      authDomain: "gop-y-thon-binh-duc.firebaseapp.com",
+      databaseURL: "https://gop-y-thon-binh-duc-default-rtdb.firebaseio.com",
+      projectId: "gop-y-thon-binh-duc",
+      storageBucket: "gop-y-thon-binh-duc.firebasestorage.app",
+      messagingSenderId: "35340837576",
+      appId: "1:35340837576:web:3fb1d9521f6b9aafdc3bfd",
+      measurementId: "G-CZL9V5H9VX"
+    };
 
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
@@ -265,15 +266,14 @@
             return;
         }
 
-        const newRef = database.ref('feedbacks').push();
+        // Lưu dữ liệu khớp với nhánh 'gop_y' của trang admin
+        const newRef = database.ref('gop_y').push();
         newRef.set({
-            fullname: fullname,
-            phone: phone,
-            address: address,
+            senderName: fullname + (address ? ' (' + address + ')' : ''),
+            senderPhone: phone,
             content: content,
             imageUrl: base64Image || '',
-            timestamp: new Date().toISOString(),
-            status: 'pending'
+            timestamp: new Date().toLocaleString('vi-VN')
         }).then(() => {
             alert('Gửi phản ánh thành công! Cảm ơn ý kiến đóng góp của cử tri.');
             document.getElementById('feedbackForm').reset();
