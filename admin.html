@@ -6,17 +6,27 @@
   <title>Quản Lý Góp Ý - Thôn Bình Đức</title>
   <style>
     body { font-family: Arial, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; }
-    .container { max-width: 1000px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    .container { max-width: 1100px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
     h2 { color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 10px; margin-top: 0; }
     .status-bar { background: #e3f2fd; padding: 10px; border-radius: 5px; margin-bottom: 20px; font-weight: bold; }
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: top; }
+    th, td { border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: middle; }
     th { background-color: #0056b3; color: white; }
     tr:nth-child(even) { background-color: #f9f9f9; }
     
     /* Hình ảnh trong bảng */
-    .img-thumb { max-width: 100px; max-height: 100px; border-radius: 4px; border: 1px solid #ccc; cursor: pointer; transition: transform 0.2s; }
+    .img-thumb { max-width: 80px; max-height: 80px; border-radius: 4px; border: 1px solid #ccc; cursor: pointer; transition: transform 0.2s; }
     .img-thumb:hover { transform: scale(1.05); }
+
+    /* Dropdown trạng thái */
+    .status-select { padding: 6px; border-radius: 4px; font-weight: bold; cursor: pointer; }
+    .status-pending { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+    .status-processing { background-color: #cce5ff; color: #004085; border: 1px solid #b8daff; }
+    .status-done { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+
+    /* Nút xóa */
+    .btn-delete { background-color: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    .btn-delete:hover { background-color: #bd2130; }
 
     /* Giao diện Đăng nhập Pop-up */
     #loginOverlay {
@@ -65,15 +75,17 @@
     <table>
       <thead>
         <tr>
-          <th style="width: 5%;">STT</th>
-          <th style="width: 18%;">Thời gian</th>
-          <th style="width: 20%;">Người gửi / SĐT</th>
-          <th style="width: 37%;">Nội dung phản ánh / Góp ý</th>
-          <th style="width: 20%;">Hình ảnh đính kèm</th>
+          <th style="width: 4%;">STT</th>
+          <th style="width: 15%;">Thời gian</th>
+          <th style="width: 18%;">Người gửi / SĐT</th>
+          <th>Nội dung phản ánh / Góp ý</th>
+          <th style="width: 12%; text-align:center;">Hình ảnh</th>
+          <th style="width: 14%; text-align:center;">Trạng thái</th>
+          <th style="width: 8%; text-align:center;">Thao tác</th>
         </tr>
       </thead>
       <tbody id="feedbackList">
-        <tr><td colspan="5" style="text-align:center;">Đang tải dữ liệu...</td></tr>
+        <tr><td colspan="7" style="text-align:center;">Đang tải dữ liệu...</td></tr>
       </tbody>
     </table>
   </div>
@@ -93,7 +105,7 @@
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
-    // --- CẤU HÌNH ĐĂNG NHẬP & GIỚI HẠN LẦN ĐĂNG NHẬP ---
+    // --- CẤU HÌNH ĐĂNG NHẬP & MÃ LICENSE ---
     const ADMIN_USER = "admin";
     const ADMIN_PASS = "admin";
     const MAX_LOGINS = 30;
@@ -154,6 +166,7 @@
       }
     }
 
+    // --- TẢI VÀ HIỂN THỊ DỮ LIỆU ---
     function loadFeedbackData() {
       const listRef = database.ref("gop_y");
       listRef.on("value", (snapshot) => {
@@ -162,7 +175,7 @@
         const data = snapshot.val();
         
         if (!data) {
-          tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Chưa có góp ý nào từ người dân.</td></tr>";
+          tbody.innerHTML = "<tr><td colspan='7' style='text-align:center;'>Chưa có góp ý nào từ người dân.</td></tr>";
           return;
         }
 
@@ -170,25 +183,63 @@
         for (let key in data) {
           const item = data[key];
           
-          // Xử lý hiển thị ảnh
-          let imageHtml = "<i style='color:#888;'>Không có ảnh</i>";
+          // Xử lý hình ảnh
+          let imageHtml = "<span style='color:#888; font-size:12px;'>Không có</span>";
           if (item.imageUrl || item.image) {
             const imgSrc = item.imageUrl || item.image;
-            imageHtml = `<a href="${imgSrc}" target="_blank" title="Bấm vào để xem ảnh kích thước đầy đủ">
-                          <img src="${imgSrc}" class="img-thumb" alt="Hình ảnh đính kèm">
+            imageHtml = `<a href="${imgSrc}" target="_blank" title="Bấm để phóng to">
+                          <img src="${imgSrc}" class="img-thumb" alt="Hình ảnh">
                         </a>`;
           }
 
+          // Xử lý Trạng thái
+          const currentStatus = item.status || "Chưa xử lý";
+          let statusClass = "status-pending";
+          if (currentStatus === "Đang xử lý") statusClass = "status-processing";
+          if (currentStatus === "Đã xử lý") statusClass = "status-done";
+
           const row = `<tr>
             <td>${stt++}</td>
-            <td>${item.timestamp || 'N/A'}</td>
-            <td><strong>${item.senderName || 'Ẩn danh'}</strong><br>${item.senderPhone || ''}</td>
+            <td style="font-size:13px;">${item.timestamp || 'N/A'}</td>
+            <td><strong>${item.senderName || 'Ẩn danh'}</strong><br><span style="color:#0056b3;">${item.senderPhone || ''}</span></td>
             <td>${item.content || ''}</td>
             <td style="text-align:center;">${imageHtml}</td>
+            <td style="text-align:center;">
+              <select class="status-select ${statusClass}" onchange="updateStatus('${key}', this.value)">
+                <option value="Chưa xử lý" ${currentStatus === 'Chưa xử lý' ? 'selected' : ''}>Chưa xử lý</option>
+                <option value="Đang xử lý" ${currentStatus === 'Đang xử lý' ? 'selected' : ''}>Đang xử lý</option>
+                <option value="Đã xử lý" ${currentStatus === 'Đã xử lý' ? 'selected' : ''}>Đã xử lý</option>
+              </select>
+            </td>
+            <td style="text-align:center;">
+              <button class="btn-delete" onclick="deleteFeedback('${key}')">Xóa</button>
+            </td>
           </tr>`;
           tbody.innerHTML += row;
         }
       });
+    }
+
+    // --- CẬP NHẬT TRẠNG THÁI XỬ LÝ ---
+    function updateStatus(id, newStatus) {
+      database.ref('gop_y/' + id).update({
+        status: newStatus
+      }).then(() => {
+        // Tự động tải lại màu sắc khi cập nhật thành công
+      }).catch((err) => {
+        alert("Lỗi cập nhật trạng thái: " + err.message);
+      });
+    }
+
+    // --- XÓA PHẢN ÁNH ---
+    function deleteFeedback(id) {
+      if (confirm("Bạn có chắc chắn muốn xóa phản ánh này không?")) {
+        database.ref('gop_y/' + id).remove().then(() => {
+          alert("Đã xóa phản ánh thành công!");
+        }).catch((err) => {
+          alert("Lỗi khi xóa: " + err.message);
+        });
+      }
     }
   </script>
 </body>
