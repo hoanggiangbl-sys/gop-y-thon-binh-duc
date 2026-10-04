@@ -1,54 +1,195 @@
-// --- CẤU HÌNH ĐĂNG NHẬP VÀ GIỚI HẠN LẦN ĐĂNG NHẬP ---
-const ADMIN_USER = "admin";
-const ADMIN_PASS = "admin"; // Mật khẩu mặc định, bạn có thể đổi ở đây
-const MAX_LOGINS = 30; // Giới hạn 30 lần đăng nhập
-const LICENSE_KEY = "BINHDUC-2026-OK"; // Mã License để mở khóa khi hết 30 lần
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quản Lý Góp Ý - Thôn Bình Đức</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; }
+    .container { max-width: 1000px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    h2 { color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 10px; margin-top: 0; }
+    .status-bar { background: #e3f2fd; padding: 10px; border-radius: 5px; margin-bottom: 20px; font-weight: bold; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: top; }
+    th { background-color: #0056b3; color: white; }
+    tr:nth-child(even) { background-color: #f9f9f9; }
+    
+    /* Hình ảnh trong bảng */
+    .img-thumb { max-width: 100px; max-height: 100px; border-radius: 4px; border: 1px solid #ccc; cursor: pointer; transition: transform 0.2s; }
+    .img-thumb:hover { transform: scale(1.05); }
 
-// Kiểm tra số lần đăng nhập đã sử dụng từ LocalStorage
-let loginCount = parseInt(localStorage.getItem("admin_login_count") || "0");
-let isLicensed = localStorage.getItem("admin_is_licensed") === "true";
-
-function checkAdminLogin() {
-  // Kiểm tra nếu chưa được mở khóa bằng License và đã quá 30 lần
-  if (!isLicensed && loginCount >= MAX_LOGINS) {
-    const keyInput = prompt(
-      `Trang quản lý đã hết 30 lượt đăng nhập dùng thử!\nVui lòng nhập Mã License kích hoạt để tiếp tục sử dụng:`
-    );
-    if (keyInput === LICENSE_KEY) {
-      localStorage.setItem("admin_is_licensed", "true");
-      alert("Kích hoạt License thành công! Bạn có thể sử dụng không giới hạn.");
-      isLicensed = true;
-    } else {
-      alert("Mã License không chính xác! Không thể truy cập trang quản lý.");
-      document.body.innerHTML = "<h2 style='color:red; text-align:center; margin-top:50px;'>Trang quản lý đã khóa do hết 30 lượt dùng thử. Vui lòng liên hệ Admin để lấy License!</h2>";
-      return false;
+    /* Giao diện Đăng nhập Pop-up */
+    #loginOverlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 9999;
     }
-  }
-
-  // Yêu cầu nhập User và Pass
-  const user = prompt("Nhập Tên đăng nhập (Mặc định: admin):");
-  const pass = prompt("Nhập Mật khẩu:");
-
-  if (user === ADMIN_USER && pass === ADMIN_PASS) {
-    if (!isLicensed) {
-      loginCount++;
-      localStorage.setItem("admin_login_count", loginCount);
-      alert(`Đăng nhập thành công!\nSố lần đăng nhập đã dùng: ${loginCount}/${MAX_LOGINS}`);
-    } else {
-      alert("Đăng nhập thành công (Tài khoản đã kích hoạt License).");
+    .login-box {
+      background: white; padding: 30px; border-radius: 10px; width: 320px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); text-align: center;
     }
-    return true;
-  } else {
-    alert("Sai tên đăng nhập hoặc mật khẩu!");
-    document.body.innerHTML = "<h2 style='color:red; text-align:center; margin-top:50px;'>Đăng nhập thất bại! Vui lòng tải lại trang để thử lại.</h2>";
-    return false;
-  }
-}
+    .login-box h3 { margin-top: 0; color: #0056b3; }
+    .login-box input { width: 100%; padding: 10px; margin: 8px 0; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+    .login-box button { width: 100%; padding: 10px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 10px; }
+    .login-box button:hover { background: #218838; }
+    .error-msg { color: red; font-size: 14px; margin-top: 10px; display: none; }
+  </style>
 
-// Gọi hàm kiểm tra ngay khi mở trang admin.html
-window.onload = function() {
-  if (checkAdminLogin()) {
-    // Chạy các hàm tải dữ liệu Firebase hiện tại của bạn ở đây...
-    if (typeof loadData === 'function') loadData();
-  }
-};
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+</head>
+<body>
+
+  <!-- Màn hình Đăng nhập Popup -->
+  <div id="loginOverlay">
+    <div class="login-box">
+      <h3 id="loginTitle">ĐĂNG NHẬP BAN THÔN</h3>
+      <div id="loginFormArea">
+        <input type="text" id="username" placeholder="Tên đăng nhập (admin)">
+        <input type="password" id="password" placeholder="Mật khẩu (admin)">
+        <button onclick="handleLogin()">ĐĂNG NHẬP</button>
+      </div>
+      <div id="licenseArea" style="display: none;">
+        <p style="color:red; font-size:13px; font-weight:bold;">Đã hết 30 lượt dùng thử miễn phí!</p>
+        <input type="text" id="licenseKey" placeholder="Nhập Mã License kích hoạt">
+        <button onclick="activateLicense()" style="background:#007bff;">KÍCH HOẠT LICENSE</button>
+      </div>
+      <div id="errMsg" class="error-msg"></div>
+    </div>
+  </div>
+
+  <!-- Nội dung trang quản lý chính -->
+  <div class="container" id="mainContent" style="display:none;">
+    <h2>DANH SÁCH GÓP Ý NGUYỆN VỌNG - THÔN BÌNH ĐỨC</h2>
+    <div class="status-bar" id="licenseStatus">Trạng thái: Đang tải thông tin...</div>
+    
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 5%;">STT</th>
+          <th style="width: 18%;">Thời gian</th>
+          <th style="width: 20%;">Người gửi / SĐT</th>
+          <th style="width: 37%;">Nội dung phản ánh / Góp ý</th>
+          <th style="width: 20%;">Hình ảnh đính kèm</th>
+        </tr>
+      </thead>
+      <tbody id="feedbackList">
+        <tr><td colspan="5" style="text-align:center;">Đang tải dữ liệu...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    // --- CẤU HÌNH FIREBASE ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyBvNKP7IgBqQtujRiwjK44fwsC-FYG6Cb4",
+      authDomain: "gop-y-thon-binh-duc.firebaseapp.com",
+      databaseURL: "https://gop-y-thon-binh-duc-default-rtdb.firebaseio.com",
+      projectId: "gop-y-thon-binh-duc",
+      storageBucket: "gop-y-thon-binh-duc.firebasestorage.app",
+      messagingSenderId: "35340837576",
+      appId: "1:35340837576:web:3fb1d9521f6b9aafdc3bfd",
+      measurementId: "G-CZL9V5H9VX"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    // --- CẤU HÌNH ĐĂNG NHẬP & GIỚI HẠN LẦN ĐĂNG NHẬP ---
+    const ADMIN_USER = "admin";
+    const ADMIN_PASS = "admin";
+    const MAX_LOGINS = 30;
+    const MASTER_LICENSE = "BINHDUC-2026-OK";
+
+    let loginCount = parseInt(localStorage.getItem("admin_login_count") || "0");
+    let isLicensed = localStorage.getItem("admin_is_licensed") === "true";
+
+    window.onload = function() {
+      if (!isLicensed && loginCount >= MAX_LOGINS) {
+        document.getElementById("loginFormArea").style.display = "none";
+        document.getElementById("licenseArea").style.display = "block";
+      }
+    };
+
+    function handleLogin() {
+      const u = document.getElementById("username").value.trim();
+      const p = document.getElementById("password").value.trim();
+      const err = document.getElementById("errMsg");
+
+      if (u === ADMIN_USER && p === ADMIN_PASS) {
+        if (!isLicensed) {
+          loginCount++;
+          localStorage.setItem("admin_login_count", loginCount);
+        }
+        
+        document.getElementById("loginOverlay").style.display = "none";
+        document.getElementById("mainContent").style.display = "block";
+        
+        updateStatusText();
+        loadFeedbackData();
+      } else {
+        err.innerText = "Tài khoản hoặc mật khẩu không đúng!";
+        err.style.display = "block";
+      }
+    }
+
+    function activateLicense() {
+      const key = document.getElementById("licenseKey").value.trim();
+      const err = document.getElementById("errMsg");
+      if (key === MASTER_LICENSE) {
+        localStorage.setItem("admin_is_licensed", "true");
+        isLicensed = true;
+        alert("Kích hoạt License bản quyền thành công!");
+        location.reload();
+      } else {
+        err.innerText = "Mã License không chính xác!";
+        err.style.display = "block";
+      }
+    }
+
+    function updateStatusText() {
+      const statusDiv = document.getElementById("licenseStatus");
+      if (isLicensed) {
+        statusDiv.innerHTML = "Trạng thái: <span style='color:green;'>Đã kích hoạt License chính thức (Không giới hạn)</span>";
+      } else {
+        statusDiv.innerHTML = `Trạng thái: <span style='color:orange;'>Bản dùng thử (${loginCount}/${MAX_LOGINS} lần đăng nhập)</span>`;
+      }
+    }
+
+    function loadFeedbackData() {
+      const listRef = database.ref("gop_y");
+      listRef.on("value", (snapshot) => {
+        const tbody = document.getElementById("feedbackList");
+        tbody.innerHTML = "";
+        const data = snapshot.val();
+        
+        if (!data) {
+          tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Chưa có góp ý nào từ người dân.</td></tr>";
+          return;
+        }
+
+        let stt = 1;
+        for (let key in data) {
+          const item = data[key];
+          
+          // Xử lý hiển thị ảnh
+          let imageHtml = "<i style='color:#888;'>Không có ảnh</i>";
+          if (item.imageUrl || item.image) {
+            const imgSrc = item.imageUrl || item.image;
+            imageHtml = `<a href="${imgSrc}" target="_blank" title="Bấm vào để xem ảnh kích thước đầy đủ">
+                          <img src="${imgSrc}" class="img-thumb" alt="Hình ảnh đính kèm">
+                        </a>`;
+          }
+
+          const row = `<tr>
+            <td>${stt++}</td>
+            <td>${item.timestamp || 'N/A'}</td>
+            <td><strong>${item.senderName || 'Ẩn danh'}</strong><br>${item.senderPhone || ''}</td>
+            <td>${item.content || ''}</td>
+            <td style="text-align:center;">${imageHtml}</td>
+          </tr>`;
+          tbody.innerHTML += row;
+        }
+      });
+    }
+  </script>
+</body>
+</html>
